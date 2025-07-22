@@ -42,6 +42,8 @@
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
 
+I2C_HandleTypeDef hi2c1;
+
 TIM_HandleTypeDef htim3;
 
 /* USER CODE BEGIN PV */
@@ -53,6 +55,8 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_TIM3_Init(void);
+static void MX_I2C1_Init(void);
+uint16_t read_adc(ADC_HandleTypeDef *hadc, uint32_t channel);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -66,6 +70,59 @@ static void MX_TIM3_Init(void);
   * @brief  The application entry point.
   * @retval int
   */
+extern USBD_HandleTypeDef hUsbDeviceFS;
+uint16_t AS5600_ReadRawAngle(){
+	uint8_t reg = 0x0C;
+	uint8_t angle_data[2];
+	HAL_I2C_Master_Transmit(&hi2c1,0x36<<1,&reg,1,HAL_MAX_DELAY);
+	HAL_I2C_Master_Receive(&hi2c1,0x36<<1,angle_data,2,HAL_MAX_DELAY);
+	return (angle_data[0]<<8|angle_data[1]);
+}
+
+#pragma pack(push, 1)
+typedef struct {
+	uint8_t steering;     // Руль: -32768...32767
+    uint8_t throttle;  // Газ: 0...255
+    uint8_t brake;     // Тормоз: 0...255
+    uint8_t clutch;    // Сцепление: 0...255
+} USB_HID_Report_t;
+#pragma pack(pop)
+
+void send_hid_report(){
+    USB_HID_Report_t report;
+
+    // Преобразуем угол (0-4095) в диапазон руля (-32768...32767)
+    uint16_t raw_angle = AS5600_ReadRawAngle();
+    report.steering = (int16_t)((raw_angle - 2048) * 16);  // Центрируем и масштабируем
+
+    report.throttle = read_adc(&hadc1,ADC_CHANNEL_0);  // Замените на чтение с АЦП
+    report.brake = read_adc(&hadc1,ADC_CHANNEL_1);    // Замените на чтение с АЦП
+    report.clutch = read_adc(&hadc1,ADC_CHANNEL_2);    // Замените на чтение с АЦП
+
+    // Правильный вызов - передаём УКАЗАТЕЛЬ на структуру
+    USBD_HID_SendReport(&hUsbDeviceFS, (uint8_t*)&report, sizeof(report));
+}
+
+uint16_t read_adc(ADC_HandleTypeDef *hadc, uint32_t channel) {
+    ADC_ChannelConfTypeDef sConfig = {0};
+
+    // Настройка канала
+    sConfig.Channel = channel;
+    sConfig.Rank = ADC_REGULAR_RANK_1;
+    sConfig.SamplingTime = ADC_SAMPLETIME_13CYCLES_5;
+    HAL_ADC_ConfigChannel(hadc, &sConfig);
+
+    // Запуск преобразования
+    HAL_ADC_Start(hadc);
+    HAL_ADC_PollForConversion(hadc, HAL_MAX_DELAY);
+
+    // Получение результата
+    uint16_t value = HAL_ADC_GetValue(hadc);
+    HAL_ADC_Stop(hadc);
+
+    return value;
+}
+
 int main(void)
 {
   /* USER CODE BEGIN 1 */
@@ -93,6 +150,7 @@ int main(void)
   MX_ADC1_Init();
   MX_USB_DEVICE_Init();
   MX_TIM3_Init();
+  MX_I2C1_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -100,8 +158,13 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
+	   send_hid_report();
+	        HAL_Delay(10);
   {
-    /* USER CODE END WHILE */
+//send_hid_report();
+//HAL_Delay(10);
+
+	   /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
   }
@@ -203,6 +266,40 @@ static void MX_ADC1_Init(void)
 }
 
 /**
+  * @brief I2C1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_I2C1_Init(void)
+{
+
+  /* USER CODE BEGIN I2C1_Init 0 */
+
+  /* USER CODE END I2C1_Init 0 */
+
+  /* USER CODE BEGIN I2C1_Init 1 */
+
+  /* USER CODE END I2C1_Init 1 */
+  hi2c1.Instance = I2C1;
+  hi2c1.Init.ClockSpeed = 100000;
+  hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
+  hi2c1.Init.OwnAddress1 = 0;
+  hi2c1.Init.AddressingMode = I2C_ADDRESSINGMODE_7BIT;
+  hi2c1.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
+  hi2c1.Init.OwnAddress2 = 0;
+  hi2c1.Init.GeneralCallMode = I2C_GENERALCALL_DISABLE;
+  hi2c1.Init.NoStretchMode = I2C_NOSTRETCH_DISABLE;
+  if (HAL_I2C_Init(&hi2c1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN I2C1_Init 2 */
+
+  /* USER CODE END I2C1_Init 2 */
+
+}
+
+/**
   * @brief TIM3 Initialization Function
   * @param None
   * @retval None
@@ -277,10 +374,10 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pins : PB0 PB1 PB2 PB10
                            PB11 PB12 PB13 PB14
-                           PB15 PB5 PB6 PB7 */
+                           PB15 PB5 */
   GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_10
                           |GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14
-                          |GPIO_PIN_15|GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7;
+                          |GPIO_PIN_15|GPIO_PIN_5;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
