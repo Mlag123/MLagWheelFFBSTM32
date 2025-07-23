@@ -71,9 +71,9 @@ uint16_t read_adc(ADC_HandleTypeDef *hadc, uint32_t channel);
   * @retval int
   */
 extern USBD_HandleTypeDef hUsbDeviceFS;
-uint16_t AS5600_ReadRawAngle(){
-	uint8_t reg = 0x0C;
-	uint8_t angle_data[2];
+int16_t AS5600_ReadRawAngle(){
+	int8_t reg = 0x0C;
+	int8_t angle_data[2];
 	HAL_I2C_Master_Transmit(&hi2c1,0x36<<1,&reg,1,HAL_MAX_DELAY);
 	HAL_I2C_Master_Receive(&hi2c1,0x36<<1,angle_data,2,HAL_MAX_DELAY);
 	return (angle_data[0]<<8|angle_data[1]);
@@ -81,7 +81,7 @@ uint16_t AS5600_ReadRawAngle(){
 
 #pragma pack(push, 1)
 typedef struct {
-	uint8_t steering;     // Руль: -32768...32767
+	int16_t steering;     // Руль: -32768...32767
     uint8_t throttle;  // Газ: 0...255
     uint8_t brake;     // Тормоз: 0...255
     uint8_t clutch;    // Сцепление: 0...255
@@ -93,11 +93,11 @@ void send_hid_report(){
 
     // Преобразуем угол (0-4095) в диапазон руля (-32768...32767)
     uint16_t raw_angle = AS5600_ReadRawAngle();
-    report.steering = (int16_t)((raw_angle - 2048) * 16);  // Центрируем и масштабируем
+    report.steering = raw_angle*16;  // Центрируем и масштабируем
 
-    report.throttle = read_adc(&hadc1,ADC_CHANNEL_0);  // Замените на чтение с АЦП
-    report.brake = read_adc(&hadc1,ADC_CHANNEL_1);    // Замените на чтение с АЦП
-    report.clutch = read_adc(&hadc1,ADC_CHANNEL_2);    // Замените на чтение с АЦП
+    report.throttle = read_adc(&hadc1,ADC_CHANNEL_0)>>4;  // Замените на чтение с АЦП
+    report.brake = read_adc(&hadc1,ADC_CHANNEL_1)>>4;    // Замените на чтение с АЦП
+    report.clutch = read_adc(&hadc1,ADC_CHANNEL_2)>>4;    // Замените на чтение с АЦП
 
     // Правильный вызов - передаём УКАЗАТЕЛЬ на структуру
     USBD_HID_SendReport(&hUsbDeviceFS, (uint8_t*)&report, sizeof(report));
@@ -105,24 +105,18 @@ void send_hid_report(){
 
 uint16_t read_adc(ADC_HandleTypeDef *hadc, uint32_t channel) {
     ADC_ChannelConfTypeDef sConfig = {0};
-
-    // Настройка канала
     sConfig.Channel = channel;
     sConfig.Rank = ADC_REGULAR_RANK_1;
     sConfig.SamplingTime = ADC_SAMPLETIME_13CYCLES_5;
     HAL_ADC_ConfigChannel(hadc, &sConfig);
 
-    // Запуск преобразования
     HAL_ADC_Start(hadc);
     HAL_ADC_PollForConversion(hadc, HAL_MAX_DELAY);
-
-    // Получение результата
-    uint16_t value = HAL_ADC_GetValue(hadc);
+    uint16_t value = HAL_ADC_GetValue(hadc);  // 12-битное значение (0..4095)
     HAL_ADC_Stop(hadc);
 
     return value;
 }
-
 int main(void)
 {
   /* USER CODE BEGIN 1 */
@@ -158,8 +152,8 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
-	   send_hid_report();
-	        HAL_Delay(10);
+	   //send_hid_report();
+	     //   HAL_Delay(10);
   {
 //send_hid_report();
 //HAL_Delay(10);
