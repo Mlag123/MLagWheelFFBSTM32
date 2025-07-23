@@ -4,3 +4,9 @@ FFB wip.
 Descryptor is work.
 AS5600 wip.
 Potentiometer wip.
+
+
+*clocks:*
+<p align="center">
+ <img width="200px" src="Docks\clocks.png" alt="qr"/>
+</p>
