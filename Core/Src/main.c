@@ -218,7 +218,7 @@ void SystemClock_Config(void)
   */
 static void MX_ADC1_Init(void)
 {
-
+//test
   /* USER CODE BEGIN ADC1_Init 0 */
 
   /* USER CODE END ADC1_Init 0 */
