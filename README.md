@@ -8,5 +8,5 @@ Potentiometer wip.
 
 *clocks:*
 <p align="center">
- <img width="200px" src="Docks\clocks.png" alt="qr"/>
+ <img width="820px" src="Docks\clocks.png" alt="qr"/>
 </p>
