@@ -91,15 +91,14 @@ typedef struct {
 void send_hid_report(){
     USB_HID_Report_t report;
 
-    // Преобразуем угол (0-4095) в диапазон руля (-32768...32767)
     uint16_t raw_angle = AS5600_ReadRawAngle();
-    report.steering = raw_angle*16;  // Центрируем и масштабируем
+    report.steering = raw_angle*16;
 
-    report.throttle = read_adc(&hadc1,ADC_CHANNEL_0)>>4;  // Замените на чтение с АЦП
-    report.brake = read_adc(&hadc1,ADC_CHANNEL_1)>>4;    // Замените на чтение с АЦП
-    report.clutch = read_adc(&hadc1,ADC_CHANNEL_2)>>4;    // Замените на чтение с АЦП
+    report.throttle = read_adc(&hadc1,ADC_CHANNEL_0)>>4;
+    report.brake = read_adc(&hadc1,ADC_CHANNEL_1)>>4;
+    report.clutch = read_adc(&hadc1,ADC_CHANNEL_2)>>4;
 
-    // Правильный вызов - передаём УКАЗАТЕЛЬ на структуру
+
     USBD_HID_SendReport(&hUsbDeviceFS, (uint8_t*)&report, sizeof(report));
 }
 
@@ -152,8 +151,8 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
-	   //send_hid_report();
-	     //   HAL_Delay(10);
+	   send_hid_report();
+	        HAL_Delay(10);
   {
 //send_hid_report();
 //HAL_Delay(10);
