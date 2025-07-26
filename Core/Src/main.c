@@ -23,6 +23,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "usbd_hid.h"
+#include "as5600.h";
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -92,6 +93,7 @@ void send_hid_report(){
     USB_HID_Report_t report;
 
     uint16_t raw_angle = AS5600_ReadRawAngle();
+    //uint16_t raw_angle =
     report.steering = raw_angle*16;
 
     report.throttle = read_adc(&hadc1,ADC_CHANNEL_0)>>4;
