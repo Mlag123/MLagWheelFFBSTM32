@@ -43,16 +43,28 @@ __ALIGN_BEGIN uint8_t WHEEL_HID_DESC[DESK_WHEEL_SIZE] __ALIGN_END = {
 	    0x75, 0x10,                    //   REPORT_SIZE (16)
 	    0x95, 0x01,                    //   REPORT_COUNT (1)
 	    0x81, 0x02,                    //   INPUT (Data,Var,Abs)
-	    0x05, 0x09,        // USAGE_PAGE (Button)
-	    0x19, 0x01,        // USAGE_MINIMUM (Button 1)
-	    0x29, 0x10,        // USAGE_MAXIMUM (Button 16)
-	    0x15, 0x00,        // LOGICAL_MINIMUM (0)
-	    0x25, 0x01,        // LOGICAL_MAXIMUM (1)
-	    0x75, 0x01,        // REPORT_SIZE (1 bit)
-	    0x95, 0x10,        // REPORT_COUNT (16 кнопок)
-	    0x81, 0x02,        // INPUT (Data,Var,Abs)
+		0x05, 0x09,        // USAGE_PAGE (Button)
+		0x19, 0x01,        // USAGE_MINIMUM (Button 1)
+		0x29, 0x0A,        // USAGE_MAXIMUM (Button 10)
+		0x15, 0x00,        // LOGICAL_MINIMUM (0)
+		0x25, 0x01,        // LOGICAL_MAXIMUM (1)
+		0x75, 0x01,        // REPORT_SIZE (1 bit)
+		0x95, 0x10,        // REPORT_COUNT (16 бит) // Но реально используем 10
+		0x81, 0x02,        // INPUT (Data,Var,Abs)
 
 	    0xc0                           // END_COLLECTION                      // END_COLLECTION
 };
 
 #endif /* ST_STM32_USB_DEVICE_LIBRARY_CLASS_HID_INC_USB_DESC_H_ */
+/*
+
+	0x05, 0x09,        // USAGE_PAGE (Button)
+		0x19, 0x01,        // USAGE_MINIMUM (Button 1)
+		0x29, 0x0A,        // USAGE_MAXIMUM (Button 10)
+		0x15, 0x00,        // LOGICAL_MINIMUM (0)
+		0x25, 0x01,        // LOGICAL_MAXIMUM (1)
+		0x75, 0x01,        // REPORT_SIZE (1 bit)
+		0x95, 0x10,        // REPORT_COUNT (16 бит) // Но реально используем 10
+		0x81, 0x02,        // INPUT (Data,Var,Abs)
+		
+		*/

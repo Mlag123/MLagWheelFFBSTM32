@@ -1,34 +1,15 @@
 /* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2025 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "usb_device.h"
-
+#include "as5600.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#include "usbd_hid.h"
-#include "as5600.h";
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -37,6 +18,8 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
+#define Led_Pin GPIO_PIN_13
+#define LedChPort GPIOC
 
 /* USER CODE END PM */
 
@@ -47,8 +30,9 @@ I2C_HandleTypeDef hi2c1;
 
 TIM_HandleTypeDef htim3;
 
-/* USER CODE BEGIN PV */
+UART_HandleTypeDef huart1;
 
+/* USER CODE BEGIN PV */
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -57,71 +41,25 @@ static void MX_GPIO_Init(void);
 static void MX_ADC1_Init(void);
 static void MX_TIM3_Init(void);
 static void MX_I2C1_Init(void);
-uint16_t read_adc(ADC_HandleTypeDef *hadc, uint32_t channel);
+static void MX_USART1_UART_Init(void);
+static uint16_t readADC(int channel);
+static void printn(int num);
+uint16_t readButtons(void);
+//uint16_t readButDebound(void) ;
 /* USER CODE BEGIN PFP */
-
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
 /* USER CODE END 0 */
 
 /**
   * @brief  The application entry point.
   * @retval int
   */
-extern USBD_HandleTypeDef hUsbDeviceFS;
-int16_t AS5600_ReadRawAngle(){
-	int8_t reg = 0x0C;
-	int8_t angle_data[2];
-	HAL_I2C_Master_Transmit(&hi2c1,0x36<<1,&reg,1,HAL_MAX_DELAY);
-	HAL_I2C_Master_Receive(&hi2c1,0x36<<1,angle_data,2,HAL_MAX_DELAY);
-	return (angle_data[0]<<8|angle_data[1]);
-}
-
-#pragma pack(push, 1)
-typedef struct {
-	int16_t steering;     // Руль: -32768...32767
-    uint8_t throttle;  // Газ: 0...255
-    uint8_t brake;     // Тормоз: 0...255
-    uint8_t clutch;    // Сцепление: 0...255
-} USB_HID_Report_t;
-#pragma pack(pop)
-
-void send_hid_report(){
-    USB_HID_Report_t report;
-
-    uint16_t raw_angle = AS5600_ReadRawAngle();
-    //uint16_t raw_angle =
-    report.steering = raw_angle*16;
-
-    report.throttle = read_adc(&hadc1,ADC_CHANNEL_0)>>4;
-    report.brake = read_adc(&hadc1,ADC_CHANNEL_1)>>4;
-    report.clutch = read_adc(&hadc1,ADC_CHANNEL_2)>>4;
-
-
-    USBD_HID_SendReport(&hUsbDeviceFS, (uint8_t*)&report, sizeof(report));
-}
-
-uint16_t read_adc(ADC_HandleTypeDef *hadc, uint32_t channel) {
-    ADC_ChannelConfTypeDef sConfig = {0};
-    sConfig.Channel = channel;
-    sConfig.Rank = ADC_REGULAR_RANK_1;
-    sConfig.SamplingTime = ADC_SAMPLETIME_13CYCLES_5;
-    HAL_ADC_ConfigChannel(hadc, &sConfig);
-
-    HAL_ADC_Start(hadc);
-    HAL_ADC_PollForConversion(hadc, HAL_MAX_DELAY);
-    uint16_t value = HAL_ADC_GetValue(hadc);  // 12-битное значение (0..4095)
-    HAL_ADC_Stop(hadc);
-
-    return value;
-}
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -130,7 +68,6 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
-
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -146,25 +83,196 @@ int main(void)
   MX_USB_DEVICE_Init();
   MX_TIM3_Init();
   MX_I2C1_Init();
+  MX_USART1_UART_Init();
+  float getAngleRaw(void);
   /* USER CODE BEGIN 2 */
-
   /* USER CODE END 2 */
-
+  //AS5600_SetSlowFilter();  //set slowFilter <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< MLAG
+  initSteeringCenter();
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-	   send_hid_report();
-	        HAL_Delay(10);
-  {
-//send_hid_report();
-//HAL_Delay(10);
-
-	   /* USER CODE END WHILE */
-
+    /* USER CODE END WHILE */
+  	  while(1){
+        HAL_GPIO_WritePin(LedChPort,Led_Pin,GPIO_PIN_RESET);
+          sendUSBReport();
+          
+          //printn(HAL_GPIO_ReadPin(GPIOB, gpio_but1_Pin));
+          HAL_Delay(10);
+  	  }
     /* USER CODE BEGIN 3 */
-  }
   /* USER CODE END 3 */
 }
+
+
+extern USBD_HandleTypeDef hUsbDeviceFS;
+#pragma pack(push,1)
+typedef struct 
+{
+  int16_t wheel;     // 0-65535 (как в дескрипторе)
+  uint16_t throttle;  // 0-4096 (12-bit ADC)
+  uint16_t brake;     // 0-4096
+  uint16_t clutch;    // 0-4096
+  uint16_t buttons;   // 16 кнопок (битовая маска)
+ 
+} USB_HID_Report_t;
+#pragma pack(pop);
+
+
+#include "main.h"
+
+#define ANGLE_RESOLUTION 4096
+#define UINT16_MID 32767
+#define UINT16_MAX 65535
+
+static int32_t accumulated_angle = 0;  // "Развернутый" угол, может быть <0 или >4095
+static uint16_t prev_raw_angle = 0;
+static uint8_t initialized = 0;
+
+void initSteeringCenter(void) {
+    prev_raw_angle = getAngle();
+    accumulated_angle = 0;
+    initialized = 1;
+}
+
+uint16_t getSteeringPosition(void) {
+    if (!initialized) {
+        initSteeringCenter();
+    }
+
+    uint16_t current_raw = getAngle();
+    int16_t delta = (int16_t)(current_raw - prev_raw_angle);
+
+    // Обработка "перескока" через 0 (unwrap)
+    if (delta > (ANGLE_RESOLUTION / 2)) {
+        delta -= ANGLE_RESOLUTION;
+    } else if (delta < -(ANGLE_RESOLUTION / 2)) {
+        delta += ANGLE_RESOLUTION;
+    }
+
+    accumulated_angle += delta;
+    prev_raw_angle = current_raw;
+
+    // Масштабируем accumulated_angle в uint16_t диапазон с центром 32767
+    // Предположим, что максимальный ход руля +- 4096*2 (примерно два оборота)
+    // Скорректируй множитель по своему ходy руля
+
+    int32_t scaled = ((int64_t)accumulated_angle * UINT16_MID) / (ANGLE_RESOLUTION * 2);
+    int32_t pos = (int32_t)UINT16_MID + scaled;
+
+    // wrap-around для uint16_t
+    if (pos < 0) pos += UINT16_MAX + 1;
+    if (pos > UINT16_MAX) pos -= UINT16_MAX + 1;
+
+    return (uint16_t)pos;
+}
+
+
+void sendUSBReport(void){
+  USB_HID_Report_t report = {0};
+ // updateVirtualAngle();
+  report.wheel =getSteeringPosition();
+  
+  // 12-битные ADC значения (0..4095)
+  report.throttle = 0;
+  report.brake = 0;
+  report.clutch = 0;
+//  printn(last_raw_angle);
+  // Чтение кнопок (пример)
+  report.buttons = readButtons(); // Нужно реализовать эту функцию
+  if (report.buttons != 0) {
+    HAL_UART_Transmit(&huart1, (uint8_t*)"!!! BUTTON ACTIVE !!!\r\n", 24, 100);
+}
+
+  char debug_msg[64];
+snprintf(debug_msg, sizeof(debug_msg), "BTN: 0x%04X\r\n", report.buttons);
+//HAL_UART_Transmit(&huart1, (uint8_t*)debug_msg, strlen(debug_msg), 100);
+
+  
+  USBD_StatusTypeDef status = USBD_HID_SendReport(&hUsbDeviceFS, (uint8_t*)&report, sizeof(report));
+  if(status != USBD_OK) {
+    printn((int)status);
+  }
+  
+}
+/*
+uint16_t readButtons(void) {
+  // Заглушка: возвращаем фиктивные значения для тестирования
+  // В реальной реализации нужно читать состояние GPIO
+  
+  static uint8_t counter = 0;
+  uint16_t buttons = 0;
+  
+  // Пример 1: Все кнопки "отжаты"
+  // return 0x0000;
+  
+  // Пример 2: Чередующиеся нажатия (для тестирования)
+  buttons = (counter & 0x01) ? 0xAAAA : 0x5555;
+  counter++;
+  
+  // Пример 3: Первые 4 кнопки нажаты
+  // buttons = 0x000F;
+  
+  return buttons;
+}
+
+*/
+uint16_t readButtons(void) {
+  uint16_t buttons = 0;
+  
+  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but1_Pin)  == GPIO_PIN_RESET) << 0;
+  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but2_Pin)  == GPIO_PIN_RESET) << 1;
+  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but3_Pin)  == GPIO_PIN_RESET) << 2;
+  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but4_Pin)  == GPIO_PIN_RESET) << 3;
+  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but5_Pin)  == GPIO_PIN_RESET) << 4;
+  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but6_Pin)  == GPIO_PIN_RESET) << 5;
+  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but7_Pin)  == GPIO_PIN_RESET) << 6;
+  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but8_Pin)  == GPIO_PIN_RESET) << 7;
+  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but9_Pin)  == GPIO_PIN_RESET) << 8;
+  buttons |= (HAL_GPIO_ReadPin(gpio_but10_GPIO_Port, gpio_but10_Pin) == GPIO_PIN_RESET) << 9;
+
+  buttons |= 0 << 10;
+  buttons |= 0 << 11;
+  buttons |= 0 << 12;
+  buttons |= 0 << 13;
+  buttons |= 0 << 14;
+  buttons |= 0 << 15;
+
+  return buttons;
+}
+
+
+#define DEBOUNCE_READS 5
+#define DEBOUNCE_DELAY_MS 10
+
+
+
+static void printn(int num){
+  char buffer[6];
+  sprintf (buffer,"%u\r\n",num);
+  
+  HAL_UART_Transmit(&huart1,(uint8_t*)buffer,strlen(buffer),HAL_MAX_DELAY);
+}
+
+
+//reading adc
+static uint16_t readADC(int channel){
+  ADC_ChannelConfTypeDef sConfig = {0};
+  sConfig.Channel = channel;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  HAL_ADC_Start(&hadc1);
+  HAL_ADC_PollForConversion(&hadc1,HAL_MAX_DELAY);
+  uint16_t value = HAL_ADC_GetValue(&hadc1);
+  return value;
+
+}
+
+
+
 
 /**
   * @brief System Clock Configuration
@@ -220,15 +328,13 @@ void SystemClock_Config(void)
   */
 static void MX_ADC1_Init(void)
 {
-//test
-  /* USER CODE BEGIN ADC1_Init 0 */
 
+  /* USER CODE BEGIN ADC1_Init 0 */
   /* USER CODE END ADC1_Init 0 */
 
   ADC_ChannelConfTypeDef sConfig = {0};
 
   /* USER CODE BEGIN ADC1_Init 1 */
-
   /* USER CODE END ADC1_Init 1 */
 
   /** Common config
@@ -255,7 +361,6 @@ static void MX_ADC1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN ADC1_Init 2 */
-
   /* USER CODE END ADC1_Init 2 */
 
 }
@@ -269,11 +374,9 @@ static void MX_I2C1_Init(void)
 {
 
   /* USER CODE BEGIN I2C1_Init 0 */
-
   /* USER CODE END I2C1_Init 0 */
 
   /* USER CODE BEGIN I2C1_Init 1 */
-
   /* USER CODE END I2C1_Init 1 */
   hi2c1.Instance = I2C1;
   hi2c1.Init.ClockSpeed = 100000;
@@ -289,7 +392,6 @@ static void MX_I2C1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN I2C1_Init 2 */
-
   /* USER CODE END I2C1_Init 2 */
 
 }
@@ -303,14 +405,12 @@ static void MX_TIM3_Init(void)
 {
 
   /* USER CODE BEGIN TIM3_Init 0 */
-
   /* USER CODE END TIM3_Init 0 */
 
   TIM_MasterConfigTypeDef sMasterConfig = {0};
   TIM_OC_InitTypeDef sConfigOC = {0};
 
   /* USER CODE BEGIN TIM3_Init 1 */
-
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
   htim3.Init.Prescaler = 0;
@@ -337,9 +437,38 @@ static void MX_TIM3_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM3_Init 2 */
-
   /* USER CODE END TIM3_Init 2 */
   HAL_TIM_MspPostInit(&htim3);
+
+}
+
+/**
+  * @brief USART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_USART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN USART1_Init 0 */
+  /* USER CODE END USART1_Init 0 */
+
+  /* USER CODE BEGIN USART1_Init 1 */
+  /* USER CODE END USART1_Init 1 */
+  huart1.Instance = USART1;
+  huart1.Init.BaudRate = 115200;
+  huart1.Init.WordLength = UART_WORDLENGTH_8B;
+  huart1.Init.StopBits = UART_STOPBITS_1;
+  huart1.Init.Parity = UART_PARITY_NONE;
+  huart1.Init.Mode = UART_MODE_TX_RX;
+  huart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  huart1.Init.OverSampling = UART_OVERSAMPLING_16;
+  if (HAL_UART_Init(&huart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN USART1_Init 2 */
+  /* USER CODE END USART1_Init 2 */
 
 }
 
@@ -353,40 +482,50 @@ static void MX_GPIO_Init(void)
   GPIO_InitTypeDef GPIO_InitStruct = {0};
 
   /* GPIO Ports Clock Enable */
+  __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_13, GPIO_PIN_RESET);
 
-  /*Configure GPIO pin : PA5 */
-  GPIO_InitStruct.Pin = GPIO_PIN_5;
+  /*Configure GPIO pin Output Level */
+  HAL_GPIO_WritePin(gpio_dir_GPIO_Port, gpio_dir_Pin, GPIO_PIN_RESET);
+
+  /*Configure GPIO pin : PC13 */
+  GPIO_InitStruct.Pin = GPIO_PIN_13;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PB0 PB1 PB2 PB10
-                           PB11 PB12 PB13 PB14
-                           PB15 PB5 */
-  GPIO_InitStruct.Pin = GPIO_PIN_0|GPIO_PIN_1|GPIO_PIN_2|GPIO_PIN_10
-                          |GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14
-                          |GPIO_PIN_15|GPIO_PIN_5;
-  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  /*Configure GPIO pin : gpio_dir_Pin */
+  GPIO_InitStruct.Pin = gpio_dir_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(gpio_dir_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : gpio_but1_Pin gpio_but2_Pin gpio_but3_Pin gpio_but4_Pin
+                           gpio_but5_Pin gpio_but6_Pin gpio_but7_Pin gpio_but8_Pin
+                           gpio_but9_Pin PB5 */
+  GPIO_InitStruct.Pin = gpio_but1_Pin|gpio_but2_Pin|gpio_but3_Pin|gpio_but4_Pin
+                          |gpio_but5_Pin|gpio_but6_Pin|gpio_but7_Pin|gpio_but8_Pin
+                          |gpio_but9_Pin|GPIO_PIN_5;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : PA8 */
-  GPIO_InitStruct.Pin = GPIO_PIN_8;
+  /*Configure GPIO pin : gpio_but10_Pin */
+  GPIO_InitStruct.Pin = gpio_but10_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(gpio_but10_GPIO_Port, &GPIO_InitStruct);
 
 }
 
 /* USER CODE BEGIN 4 */
-
 /* USER CODE END 4 */
 
 /**
@@ -396,11 +535,6 @@ static void MX_GPIO_Init(void)
 void Error_Handler(void)
 {
   /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
-  {
-  }
   /* USER CODE END Error_Handler_Debug */
 }
 
@@ -415,8 +549,6 @@ void Error_Handler(void)
 void assert_failed(uint8_t *file, uint32_t line)
 {
   /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

@@ -46,7 +46,7 @@ EndBSPDependencies */
 /* Includes ------------------------------------------------------------------*/
 #include "usbd_hid.h"
 #include "usbd_ctlreq.h"
-#include "usb_desc.h"
+#include "usb_desk.h"
 
 
 /** @addtogroup STM32_USB_DEVICE_LIBRARY
@@ -287,19 +287,6 @@ __ALIGN_BEGIN static uint8_t USBD_HID_OtherSpeedCfgDesc[USB_HID_CONFIG_DESC_SIZ]
 
 
 /* USB HID device Configuration Descriptor */
-__ALIGN_BEGIN static uint8_t USBD_HID_Desc[USB_HID_DESC_SIZ]  __ALIGN_END  =
-{
-  /* 18 */
-  0x09,         /*bLength: HID Descriptor size*/
-  HID_DESCRIPTOR_TYPE, /*bDescriptorType: HID*/
-  0x11,         /*bcdHID: HID Class Spec release number*/
-  0x01,
-  0x00,         /*bCountryCode: Hardware target country*/
-  0x01,         /*bNumDescriptors: Number of HID class descriptors to follow*/
-  0x22,         /*bDescriptorType*/
-  DESK_WHEEL_SIZE,/*wItemLength: Total length of Report descriptor*/
-  0x00,
-};
 
 /* USB Standard Device Descriptor */
 __ALIGN_BEGIN static uint8_t USBD_HID_DeviceQualifierDesc[USB_LEN_DEV_QUALIFIER_DESC]  __ALIGN_END =
@@ -439,11 +426,13 @@ static uint8_t  USBD_HID_Setup(USBD_HandleTypeDef *pdev,
             len = MIN(DESK_WHEEL_SIZE, req->wLength);
             pbuf = WHEEL_HID_DESC;
           }
-          else if (req->wValue >> 8 == HID_DESCRIPTOR_TYPE)
+          /*
+           * else if (req->wValue >> 8 == HID_DESCRIPTOR_TYPE)
           {
             pbuf = USBD_HID_Desc;
             len = MIN(USB_HID_DESC_SIZ, req->wLength);
           }
+           */
           else
           {
             USBD_CtlError(pdev, req);
