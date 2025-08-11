@@ -76,8 +76,8 @@ void Error_Handler(void);
 #define gpio_but1_GPIO_Port GPIOB
 #define gpio_but2_Pin GPIO_PIN_1
 #define gpio_but2_GPIO_Port GPIOB
-#define gpio_but3_Pin GPIO_PIN_2
-#define gpio_but3_GPIO_Port GPIOB
+#define gpio_but3_Pin GPIO_PIN_7
+#define gpio_but3_GPIO_Port GPIOA
 #define gpio_but4_Pin GPIO_PIN_10
 #define gpio_but4_GPIO_Port GPIOB
 #define gpio_but5_Pin GPIO_PIN_11

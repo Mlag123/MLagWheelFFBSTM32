@@ -4,6 +4,7 @@
 #include "main.h"
 #include "usb_device.h"
 #include "as5600.h"
+#include "stdbool.h"
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 /* USER CODE END Includes */
@@ -45,6 +46,9 @@ static void MX_USART1_UART_Init(void);
 static uint16_t readADC(int channel);
 static void printn(int num);
 uint16_t readButtons(void);
+uint16_t parse_button_data(bool *button_array,uint16_t button_size);
+
+
 //uint16_t readButDebound(void) ;
 /* USER CODE BEGIN PFP */
 /* USER CODE END PFP */
@@ -57,8 +61,10 @@ uint16_t readButtons(void);
   * @brief  The application entry point.
   * @retval int
   */
+
 int main(void)
 {
+
   /* USER CODE BEGIN 1 */
   /* USER CODE END 1 */
 
@@ -84,7 +90,7 @@ int main(void)
   MX_TIM3_Init();
   MX_I2C1_Init();
   MX_USART1_UART_Init();
-  float getAngleRaw(void);
+ // float getAngleRaw(void);
   /* USER CODE BEGIN 2 */
   /* USER CODE END 2 */
   //AS5600_SetSlowFilter();  //set slowFilter <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< MLAG
@@ -94,10 +100,10 @@ int main(void)
     /* USER CODE END WHILE */
   	  while(1){
         HAL_GPIO_WritePin(LedChPort,Led_Pin,GPIO_PIN_RESET);
-          sendUSBReport();
+        sendUSBReport();
           
           //printn(HAL_GPIO_ReadPin(GPIOB, gpio_but1_Pin));
-          HAL_Delay(10);
+        HAL_Delay(10);
   	  }
     /* USER CODE BEGIN 3 */
   /* USER CODE END 3 */
@@ -108,17 +114,19 @@ extern USBD_HandleTypeDef hUsbDeviceFS;
 #pragma pack(push,1)
 typedef struct 
 {
+  uint16_t buttons;   // 16 кнопок (битовая маска)
   int16_t wheel;     // 0-65535 (как в дескрипторе)
   uint16_t throttle;  // 0-4096 (12-bit ADC)
   uint16_t brake;     // 0-4096
   uint16_t clutch;    // 0-4096
-  uint16_t buttons;   // 16 кнопок (битовая маска)
+
  
 } USB_HID_Report_t;
 #pragma pack(pop);
 
 
 #include "main.h"
+#include "stdbool.h"
 
 #define ANGLE_RESOLUTION 4096
 #define UINT16_MID 32767
@@ -156,7 +164,7 @@ uint16_t getSteeringPosition(void) {
     // Предположим, что максимальный ход руля +- 4096*2 (примерно два оборота)
     // Скорректируй множитель по своему ходy руля
 
-    int32_t scaled = ((int64_t)accumulated_angle * UINT16_MID) / (ANGLE_RESOLUTION * 2);
+    int32_t scaled = ((int64_t)accumulated_angle * UINT16_MID) / ((ANGLE_RESOLUTION * 2));
     int32_t pos = (int32_t)UINT16_MID + scaled;
 
     // wrap-around для uint16_t
@@ -169,23 +177,17 @@ uint16_t getSteeringPosition(void) {
 
 void sendUSBReport(void){
   USB_HID_Report_t report = {0};
- // updateVirtualAngle();
+  //updateVirtualAngle();
+
+  report.buttons = readButtons();
+//  report.buttons = readButtons();
   report.wheel =getSteeringPosition();
   
-  // 12-битные ADC значения (0..4095)
+   //12-битные ADC значения (0..4095)
   report.throttle = 0;
   report.brake = 0;
   report.clutch = 0;
-//  printn(last_raw_angle);
-  // Чтение кнопок (пример)
-  report.buttons = readButtons(); // Нужно реализовать эту функцию
-  if (report.buttons != 0) {
-    HAL_UART_Transmit(&huart1, (uint8_t*)"!!! BUTTON ACTIVE !!!\r\n", 24, 100);
-}
 
-  char debug_msg[64];
-snprintf(debug_msg, sizeof(debug_msg), "BTN: 0x%04X\r\n", report.buttons);
-//HAL_UART_Transmit(&huart1, (uint8_t*)debug_msg, strlen(debug_msg), 100);
 
   
   USBD_StatusTypeDef status = USBD_HID_SendReport(&hUsbDeviceFS, (uint8_t*)&report, sizeof(report));
@@ -194,56 +196,26 @@ snprintf(debug_msg, sizeof(debug_msg), "BTN: 0x%04X\r\n", report.buttons);
   }
   
 }
-/*
-uint16_t readButtons(void) {
-  // Заглушка: возвращаем фиктивные значения для тестирования
-  // В реальной реализации нужно читать состояние GPIO
-  
-  static uint8_t counter = 0;
-  uint16_t buttons = 0;
-  
-  // Пример 1: Все кнопки "отжаты"
-  // return 0x0000;
-  
-  // Пример 2: Чередующиеся нажатия (для тестирования)
-  buttons = (counter & 0x01) ? 0xAAAA : 0x5555;
-  counter++;
-  
-  // Пример 3: Первые 4 кнопки нажаты
-  // buttons = 0x000F;
-  
-  return buttons;
-}
 
-*/
 uint16_t readButtons(void) {
   uint16_t buttons = 0;
-  
-  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but1_Pin)  == GPIO_PIN_RESET) << 0;
-  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but2_Pin)  == GPIO_PIN_RESET) << 1;
-  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but3_Pin)  == GPIO_PIN_RESET) << 2;
-  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but4_Pin)  == GPIO_PIN_RESET) << 3;
-  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but5_Pin)  == GPIO_PIN_RESET) << 4;
-  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but6_Pin)  == GPIO_PIN_RESET) << 5;
-  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but7_Pin)  == GPIO_PIN_RESET) << 6;
-  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but8_Pin)  == GPIO_PIN_RESET) << 7;
-  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but9_Pin)  == GPIO_PIN_RESET) << 8;
-  buttons |= (HAL_GPIO_ReadPin(gpio_but10_GPIO_Port, gpio_but10_Pin) == GPIO_PIN_RESET) << 9;
+  //0x0000;
+  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but1_Pin)  == GPIO_PIN_SET)<<0;
+  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but2_Pin)  == GPIO_PIN_SET)<<1;
+  buttons |= (HAL_GPIO_ReadPin(gpio_but3_GPIO_Port, gpio_but3_Pin)  == GPIO_PIN_SET)<<2; //#define gpio_but3_Pin GPIO_PIN_7!!!!!
+  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but4_Pin)  == GPIO_PIN_SET)<<3;
+  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but5_Pin)  == GPIO_PIN_SET)<<4;
+  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but6_Pin)  == GPIO_PIN_SET)<<5;
+  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but7_Pin)  == GPIO_PIN_SET)<<6; 
+  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but8_Pin)  == GPIO_PIN_SET)<<7;
+  buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but9_Pin)  == GPIO_PIN_SET)<<8; 
+  buttons |= (HAL_GPIO_ReadPin(GPIOA, gpio_but10_Pin)  == GPIO_PIN_SET)<<9;
 
-  buttons |= 0 << 10;
-  buttons |= 0 << 11;
-  buttons |= 0 << 12;
-  buttons |= 0 << 13;
-  buttons |= 0 << 14;
-  buttons |= 0 << 15;
+  printn(buttons);
 
-  return buttons;
+
+return buttons;
 }
-
-
-#define DEBOUNCE_READS 5
-#define DEBOUNCE_DELAY_MS 10
-
 
 
 static void printn(int num){
@@ -510,18 +482,23 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pins : gpio_but1_Pin gpio_but2_Pin gpio_but3_Pin gpio_but4_Pin
                            gpio_but5_Pin gpio_but6_Pin gpio_but7_Pin gpio_but8_Pin
                            gpio_but9_Pin PB5 */
-  GPIO_InitStruct.Pin = gpio_but1_Pin|gpio_but2_Pin|gpio_but3_Pin|gpio_but4_Pin
+  GPIO_InitStruct.Pin = gpio_but1_Pin|gpio_but2_Pin|gpio_but4_Pin
                           |gpio_but5_Pin|gpio_but6_Pin|gpio_but7_Pin|gpio_but8_Pin
                           |gpio_but9_Pin|GPIO_PIN_5;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pin : gpio_but10_Pin */
+  /*Configure GPIO pin : gpio_but10_Pin , gpio_but3_Pin*/
   GPIO_InitStruct.Pin = gpio_but10_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(gpio_but10_GPIO_Port, &GPIO_InitStruct);
+
+  GPIO_InitStruct.Pin = gpio_but3_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(gpio_but3_GPIO_Port, &GPIO_InitStruct);
 
 }
 
