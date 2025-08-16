@@ -47,6 +47,8 @@ static uint16_t readADC(int channel);
 static void printn(int num);
 uint16_t readButtons(void);
 uint16_t parse_button_data(bool *button_array,uint16_t button_size);
+void SetMotorDirection(uint8_t dir);
+void setMotorSpeed(uint8_t speed);
 
 
 //uint16_t readButDebound(void) ;
@@ -98,10 +100,17 @@ int main(void)
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
     /* USER CODE END WHILE */
+ 
+
+
+    
+ 
   	  while(1){
-        HAL_GPIO_WritePin(LedChPort,Led_Pin,GPIO_PIN_RESET);
+      //  HAL_GPIO_WritePin(LedChPort,Led_Pin,GPIO_PIN_RESET);
         sendUSBReport();
-          
+        SetMotorDirection(1);
+        HAL_TIM_PWM_Start(&htim3, TIM_CHANNEL_1);
+        setMotorSpeed(99);
           //printn(HAL_GPIO_ReadPin(GPIOB, gpio_but1_Pin));
         HAL_Delay(10);
   	  }
@@ -140,6 +149,21 @@ void initSteeringCenter(void) {
     prev_raw_angle = getAngle();
     accumulated_angle = 0;
     initialized = 1;
+}
+
+
+
+void SetMotorDirection(uint8_t dir){
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, dir ? GPIO_PIN_SET : GPIO_PIN_RESET);
+}
+
+void setMotorSpeed(uint8_t speed){
+    // Ограничение скорости 0-100%
+
+    if(speed> 100) speed = 1000;
+    uint16_t pulse = (48000*speed/100);
+    TIM3->CCR1 = pulse - 1;
+
 }
 
 uint16_t getSteeringPosition(void) {
@@ -378,6 +402,12 @@ static void MX_TIM3_Init(void)
 
   /* USER CODE BEGIN TIM3_Init 0 */
   /* USER CODE END TIM3_Init 0 */
+  GPIO_InitTypeDef GPIO_InitStruct;
+  GPIO_InitStruct.Pin = GPIO_PIN_6;
+GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;  // Альтернативная функция Push-Pull
+GPIO_InitStruct.Pull = GPIO_NOPULL;
+GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_HIGH;
+HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   TIM_MasterConfigTypeDef sMasterConfig = {0};
   TIM_OC_InitTypeDef sConfigOC = {0};
@@ -385,11 +415,11 @@ static void MX_TIM3_Init(void)
   /* USER CODE BEGIN TIM3_Init 1 */
   /* USER CODE END TIM3_Init 1 */
   htim3.Instance = TIM3;
-  htim3.Init.Prescaler = 0;
+  htim3.Init.Prescaler =0;
   htim3.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim3.Init.Period = 65535;
+  htim3.Init.Period = 48000 - 1;
   htim3.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
-  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
+  htim3.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_ENABLE;
   if (HAL_TIM_PWM_Init(&htim3) != HAL_OK)
   {
     Error_Handler();
@@ -499,6 +529,8 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
   HAL_GPIO_Init(gpio_but3_GPIO_Port, &GPIO_InitStruct);
+
+
 
 }
 
