@@ -1,28 +1,17 @@
-/* USER CODE BEGIN Header */
-/* USER CODE END Header */
-/* Includes ------------------------------------------------------------------*/
+
 #include "main.h"
 #include "usb_device.h"
 #include "as5600.h"
 #include "stdbool.h"
-/* Private includes ----------------------------------------------------------*/
-/* USER CODE BEGIN Includes */
-/* USER CODE END Includes */
+#include "main.h"
+#include "stdbool.h"
 
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
-/* USER CODE END PTD */
-
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
-/* USER CODE END PD */
-
-/* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
 #define Led_Pin GPIO_PIN_13
 #define LedChPort GPIOC
 
-/* USER CODE END PM */
+#define ANGLE_RESOLUTION 4096
+#define UINT16_MID 32767
+#define UINT16_MAX 65535
 
 /* Private variables ---------------------------------------------------------*/
 ADC_HandleTypeDef hadc1;
@@ -32,9 +21,6 @@ I2C_HandleTypeDef hi2c1;
 TIM_HandleTypeDef htim3;
 
 UART_HandleTypeDef huart1;
-
-/* USER CODE BEGIN PV */
-/* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
@@ -52,14 +38,6 @@ void setMotorSpeed(uint8_t speed);
 uint16_t getSteeringPosition(void);
 uint16_t initSteeringCenter(void);
 
-// uint16_t readButDebound(void) ;
-/* USER CODE BEGIN PFP */
-/* USER CODE END PFP */
-
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
-/* USER CODE END 0 */
-
 /**
  * @brief  The application entry point.
  * @retval int
@@ -68,39 +46,16 @@ uint16_t initSteeringCenter(void);
 int main(void)
 {
 
-  /* USER CODE BEGIN 1 */
-  /* USER CODE END 1 */
-
-  /* MCU Configuration--------------------------------------------------------*/
-
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
-  /* USER CODE BEGIN Init */
-  /* USER CODE END Init */
-
-  /* Configure the system clock */
   SystemClock_Config();
 
-  /* USER CODE BEGIN SysInit */
-
-  /* USER CODE END SysInit */
-
-  /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_ADC1_Init();
   MX_USB_DEVICE_Init();
   MX_TIM3_Init();
   MX_I2C1_Init();
   MX_USART1_UART_Init();
-  // float getAngleRaw(void);
-  /* USER CODE BEGIN 2 */
-  /* USER CODE END 2 */
-  // AS5600_SetSlowFilter();  //set slowFilter <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< MLAG
-
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-  /* USER CODE END WHILE */
 
   uint16_t center_wheel = initSteeringCenter();
 
@@ -123,11 +78,9 @@ int main(void)
     {
       setMotorSpeed(0);
     }
-          
-    wheel_pos =  angle_pos_motor -wheel_pos;
-    setMotorSpeed(abs(wheel_pos));
 
-    
+    wheel_pos = angle_pos_motor - wheel_pos;
+    setMotorSpeed(abs(wheel_pos));
 
     HAL_Delay(10);
   }
@@ -148,14 +101,7 @@ typedef struct
 } USB_HID_Report_t;
 #pragma pack(pop);
 
-#include "main.h"
-#include "stdbool.h"
-
-#define ANGLE_RESOLUTION 4096
-#define UINT16_MID 32767
-#define UINT16_MAX 65535
-
-static int32_t accumulated_angle = 0; // "Развернутый" угол, может быть <0 или >4095
+static int32_t accumulated_angle = 0; //
 static uint16_t prev_raw_angle = 0;
 static uint8_t initialized = 0;
 
@@ -174,7 +120,6 @@ void SetMotorDirection(uint8_t dir)
 
 void setMotorSpeed(uint8_t speed)
 {
-  // Ограничение скорости 0-100%
 
   if (speed > 100)
     speed = 1000;
@@ -192,7 +137,6 @@ uint16_t getSteeringPosition(void)
   uint16_t current_raw = getAngle();
   int16_t delta = (int16_t)(current_raw - prev_raw_angle);
 
-  // Обработка "перескока" через 0 (unwrap)
   if (delta > (ANGLE_RESOLUTION / 2))
   {
     delta -= ANGLE_RESOLUTION;
@@ -204,10 +148,6 @@ uint16_t getSteeringPosition(void)
 
   accumulated_angle += delta;
   prev_raw_angle = current_raw;
-
-  // Масштабируем accumulated_angle в uint16_t диапазон с центром 32767
-  // Предположим, что максимальный ход руля +- 4096*2 (примерно два оборота)
-  // Скорректируй множитель по своему ходy руля
 
   int32_t scaled = ((int64_t)accumulated_angle * UINT16_MID) / ((ANGLE_RESOLUTION * 2));
   int32_t pos = (int32_t)UINT16_MID + scaled;
@@ -373,8 +313,7 @@ static void MX_ADC1_Init(void)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN ADC1_Init 2 */
-  /* USER CODE END ADC1_Init 2 */
+
 }
 
 /**
@@ -385,11 +324,7 @@ static void MX_ADC1_Init(void)
 static void MX_I2C1_Init(void)
 {
 
-  /* USER CODE BEGIN I2C1_Init 0 */
-  /* USER CODE END I2C1_Init 0 */
 
-  /* USER CODE BEGIN I2C1_Init 1 */
-  /* USER CODE END I2C1_Init 1 */
   hi2c1.Instance = I2C1;
   hi2c1.Init.ClockSpeed = 100000;
   hi2c1.Init.DutyCycle = I2C_DUTYCYCLE_2;
@@ -453,8 +388,7 @@ static void MX_TIM3_Init(void)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN TIM3_Init 2 */
-  /* USER CODE END TIM3_Init 2 */
+
   HAL_TIM_MspPostInit(&htim3);
 }
 
@@ -466,11 +400,7 @@ static void MX_TIM3_Init(void)
 static void MX_USART1_UART_Init(void)
 {
 
-  /* USER CODE BEGIN USART1_Init 0 */
-  /* USER CODE END USART1_Init 0 */
 
-  /* USER CODE BEGIN USART1_Init 1 */
-  /* USER CODE END USART1_Init 1 */
   huart1.Instance = USART1;
   huart1.Init.BaudRate = 115200;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
@@ -483,8 +413,7 @@ static void MX_USART1_UART_Init(void)
   {
     Error_Handler();
   }
-  /* USER CODE BEGIN USART1_Init 2 */
-  /* USER CODE END USART1_Init 2 */
+
 }
 
 /**
