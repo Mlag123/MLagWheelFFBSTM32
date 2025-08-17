@@ -183,8 +183,42 @@ void sendUSBReport(void)
   }
 }
 
+void readMatrixButtons(void)
+{ // testcode
+  uint8_t button_matrix[4][4] = {0};
+
+  uint32_t row_pins[4] = {gpio_but1_Pin, gpio_but2_Pin, gpio_but3_Pin, gpio_but4_Pin};
+  uint32_t col_pins[4] = {gpio_but5_Pin, gpio_but6_Pin, gpio_but7_Pin, gpio_but8_Pin};
+
+  for (uint8_t row = 0; row < 4; row++)
+  {
+    if (row_pins == gpio_but3_Pin)
+    {
+      HAL_GPIO_WritePin(GPIOA, row_pins[row], GPIO_PIN_SET);
+    }
+    else
+    {
+      HAL_GPIO_WritePin(GPIOB, row_pins[row], GPIO_PIN_SET);
+    }
+    for (uint16_t col; col < 4; col++)
+    {
+      button_matrix[row][col] = HAL_GPIO_ReadPin(GPIOB, row_pins[row]) == GPIO_PIN_RESET;
+
+      if (row_pins == gpio_but3_Pin)
+      {
+        HAL_GPIO_WritePin(GPIOA, row_pins[row], GPIO_PIN_RESET);
+      }
+      else
+      {
+        HAL_GPIO_WritePin(GPIOB, row_pins[row], GPIO_PIN_RESET);
+      }
+    }
+  }
+}
+
 uint16_t readButtons(void)
 {
+
   uint16_t buttons = 0;
   // 0x0000;
   buttons |= (HAL_GPIO_ReadPin(GPIOB, gpio_but1_Pin) == GPIO_PIN_SET) << 0;
@@ -313,7 +347,6 @@ static void MX_ADC1_Init(void)
   {
     Error_Handler();
   }
-
 }
 
 /**
@@ -323,7 +356,6 @@ static void MX_ADC1_Init(void)
  */
 static void MX_I2C1_Init(void)
 {
-
 
   hi2c1.Instance = I2C1;
   hi2c1.Init.ClockSpeed = 100000;
@@ -400,7 +432,6 @@ static void MX_TIM3_Init(void)
 static void MX_USART1_UART_Init(void)
 {
 
-
   huart1.Instance = USART1;
   huart1.Init.BaudRate = 115200;
   huart1.Init.WordLength = UART_WORDLENGTH_8B;
@@ -413,7 +444,6 @@ static void MX_USART1_UART_Init(void)
   {
     Error_Handler();
   }
-
 }
 
 /**
