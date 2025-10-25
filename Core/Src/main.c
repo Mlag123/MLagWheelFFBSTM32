@@ -176,23 +176,86 @@ int16_t wheel_rotate;
 void sendUSBReport(void)
 {
   USB_HID_Report_t report = {0};
+
+
+
+  static int16_t wheel_angle = 0;       // накопленный угол
+  static int16_t last_wheel_angle = 0;  // предыдущее значение
+  int16_t raw_wheel_angle;              // текущее положение
+  int16_t wheel_delta;                  // разница между текущим и прошлым
+
+
+  static int16_t throttle_angle = 0;       // накопленный угол
+  static int16_t last_throttle_angle = 0;  // предыдущее значение
+  int16_t raw_throttle_angle;              // текущее положение
+  int16_t throttle_delta;
+
+
+
+  static int16_t brake_angle = 0;       // накопленный угол
+  static int16_t last_brake_angle = 0;  // предыдущее значение
+  int16_t raw_brake_angle;              // текущее положение
+  int16_t brake_delta;
+  readAllADC(&brake_val, &throttle_val);
+
+
+
+  // считываем текущее положение руля (например, от 0 до 4095)
+  raw_wheel_angle = getSteeringPosition();
+
+  // вычисляем изменение
+  wheel_delta = raw_wheel_angle - last_wheel_angle;
+
+  // фильтруем мелкие шумы (например, ±2 единицы)
+  if (abs(wheel_delta) > 2) {
+      wheel_angle += wheel_delta;
+      last_wheel_angle = raw_wheel_angle;
+  }
+
+
+  //throttle
+
+
+
+  raw_throttle_angle = throttle_val;
+  throttle_delta = raw_throttle_angle - last_throttle_angle;
+
+  if(abs(throttle_delta)>2){
+	  throttle_angle =raw_throttle_angle;
+	  last_throttle_angle = raw_throttle_angle;
+  }
+
+
+  //brake
+
+  raw_brake_angle = brake_val;
+  brake_delta = raw_brake_angle - last_brake_angle;
+
+    if(abs(brake_delta)>2){
+    	brake_angle =raw_brake_angle;
+  	  last_brake_angle = raw_brake_angle;
+    }
+
+
+
+  //brake
+  //throttle
   // updateVirtualAngle();
 
-  readAllADC(&brake_val, &throttle_val);
+
   static uint32_t report_count = 0;
 
   report.wheel = 0;
-  report.buttons = readButtons();
+ // report.buttons = readButtons();
 
-   report.buttons = readButtons();
- wheel_rotate = getSteeringPosition();
+  report.buttons = readButtons();
   report.wheel = wheel_rotate;
 
 
   // 12-битные ADC значения (0..4095)
-  report.throttle = throttle_val;
-  report.brake = brake_val;
-  report.clutch = 5;
+  report.throttle = throttle_angle;
+  report.brake = brake_angle;
+  report.clutch = 5; //WIP
 
 
   if (report_count % 50 == 0) {
